@@ -15,20 +15,18 @@ import (
 )
 
 type Handler struct {
-	Url           string
-	ListenAddress string
-	injectBody    string
+	Url               string
+	ListenAddress     string
+	injectBody        string
 	filterTypes       []string
-	excludeFile []string
-	ConfigFile string
-	LoggerFile string
-	config     *viper.Viper
+	excludeFile       []string
+	ConfigFile        string
+	LoggerFile        string
+	config            *viper.Viper
 	staticDir         string
 	PrickingPrefixUrl string
 	Logger            *log.Logger
 }
-
-
 
 func (handler *Handler) LoadConfig() {
 	handler.config = viper.New()
@@ -60,7 +58,6 @@ func (handler *Handler) LoadConfig() {
 	handler.ListenAddress = handler.config.GetString("listen_address")
 }
 
-
 func (handler *Handler) modifyResponse(w *http.Response) error {
 	respBodyByte, err := ioutil.ReadAll(w.Body)
 	if err != nil {
@@ -73,12 +70,12 @@ func (handler *Handler) modifyResponse(w *http.Response) error {
 
 	// 让客户端跟随跳转
 	if w.StatusCode == 302 {
-		replacer := strings.NewReplacer(handler.Url,"")
+		replacer := strings.NewReplacer(handler.Url, "")
 		newLocation := replacer.Replace(w.Header.Get("Location"))
-		if !strings.HasPrefix(newLocation,"/") {
+		if !strings.HasPrefix(newLocation, "/") {
 			newLocation = "/" + newLocation
 		}
-		w.Header.Set("Location",newLocation)
+		w.Header.Set("Location", newLocation)
 	}
 
 	// gzip 解压
@@ -90,11 +87,11 @@ func (handler *Handler) modifyResponse(w *http.Response) error {
 	// 移除内容安全策略
 	w.Header.Del("Content-Security-Policy-Report-Only")
 	w.Header.Del("Content-Security-Policy")
-	respBodyByte = bytes.Replace(respBodyByte, []byte("Content-Security-Policy"), []byte( "") , -1)
-	respBodyByte = bytes.Replace(respBodyByte, []byte("content-security-policy"), []byte( "") , -1)
+	respBodyByte = bytes.Replace(respBodyByte, []byte("Content-Security-Policy"), []byte(""), -1)
+	respBodyByte = bytes.Replace(respBodyByte, []byte("content-security-policy"), []byte(""), -1)
 
 	// 注入内容
-	respBodyByte = bytes.Replace(respBodyByte, []byte("</body>"), []byte(handler.injectBody + "</body>") , -1)
+	respBodyByte = bytes.Replace(respBodyByte, []byte("</body>"), []byte(handler.injectBody+"</body>"), -1)
 
 	w.Body = ioutil.NopCloser(bytes.NewReader(respBodyByte))
 	w.ContentLength = int64(len(respBodyByte))
@@ -139,9 +136,9 @@ func (handler *Handler) loggingRequest(r *http.Request) {
 	handler.Logger.Println(buffer.String())
 }
 
-func (handler * Handler)modifyHost(r *http.Request,header string ,host string)  {
+func (handler *Handler) modifyHost(r *http.Request, header string, host string) {
 	Url, err := url.Parse(r.Header.Get(header))
-	if  err != nil{
+	if err != nil {
 		return
 	}
 	Url.Host = host
@@ -155,9 +152,10 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Host = remote.Host // 覆盖Host头
 
-	handler.modifyHost(r,"Referer",remote.Host)
-	handler.modifyHost(r,"Origin",remote.Host)
-
+	handler.modifyHost(r, "Referer", remote.Host)
+	handler.modifyHost(r, "Origin", remote.Host)
+	r.Header.Set("Accept-Encoding", "gzip")
+	r.Header.Del("If-Modified-Since")
 	if handler.prickingResponse(w, r) {
 		return
 	}
@@ -168,4 +166,3 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	proxy.ServeHTTP(w, r)
 }
-
